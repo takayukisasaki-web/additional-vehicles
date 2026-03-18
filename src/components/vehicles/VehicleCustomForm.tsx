@@ -25,18 +25,19 @@ export default function VehicleCustomForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2 p-2 bg-gray-50 rounded-lg">
-      <div>
+    <form onSubmit={handleSubmit} className="flex flex-nowrap items-start gap-2 p-2 bg-gray-50 rounded-lg">
+      <div className="shrink-0">
         <label className="text-xs text-gray-500">車種名</label>
         <input
           type="text"
           placeholder="車種名"
           value={typeName}
           onChange={(e) => setTypeName(e.target.value)}
-          className="block w-28 px-2 py-1 text-sm border border-gray-300 rounded"
+          className="block w-24 px-2 py-1 text-sm border border-gray-300 rounded"
         />
+        <span className="text-xs text-transparent">-</span>
       </div>
-      <div>
+      <div className="shrink-0">
         <label className="text-xs text-gray-500">全長(cm)</label>
         <input
           type="number"
@@ -45,11 +46,9 @@ export default function VehicleCustomForm() {
           onChange={(e) => setLengthCm(e.target.value)}
           className="block w-20 px-2 py-1 text-sm border border-gray-300 rounded"
         />
-        {lengthVal > 0 && (
-          <span className="text-xs text-gray-400">{cmToCells(lengthVal)}セル</span>
-        )}
+        <span className="text-xs text-gray-400">{lengthVal > 0 ? `${cmToCells(lengthVal)}セル` : "\u00A0"}</span>
       </div>
-      <div>
+      <div className="shrink-0">
         <label className="text-xs text-gray-500">全幅(cm)</label>
         <input
           type="number"
@@ -58,11 +57,9 @@ export default function VehicleCustomForm() {
           onChange={(e) => setWidthCm(e.target.value)}
           className="block w-20 px-2 py-1 text-sm border border-gray-300 rounded"
         />
-        {widthVal > 0 && (
-          <span className="text-xs text-gray-400">{cmToCells(widthVal)}セル</span>
-        )}
+        <span className="text-xs text-gray-400">{widthVal > 0 ? `${cmToCells(widthVal)}セル` : "\u00A0"}</span>
       </div>
-      <div>
+      <div className="shrink-0">
         <label className="text-xs text-gray-500">区分</label>
         <select
           value={status}
@@ -72,14 +69,18 @@ export default function VehicleCustomForm() {
           <option value="existing">既存</option>
           <option value="new">増車</option>
         </select>
+        <span className="text-xs text-transparent">-</span>
       </div>
-      <button
-        type="submit"
-        disabled={!isValid}
-        className="px-4 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        追加
-      </button>
+      <div className="shrink-0 pt-4">
+        <button
+          type="submit"
+          disabled={!isValid}
+          className="px-4 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          追加
+        </button>
+        <span className="block text-xs text-transparent">-</span>
+      </div>
     </form>
   );
 }
