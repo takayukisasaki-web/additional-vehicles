@@ -156,18 +156,25 @@ export async function generatePdf(
     color: headerColor,
   });
 
-  // フォントサイズ（ヘッダーは固定、グリッド内はスケール）
-  const meterFontSize = 8;
-  const headerFontSize = 8;
+  // フォントサイズ — セル幅に合わせて調整
+  const headerFontSize = Math.max(4, Math.min(8, PDF_CELL_SIZE * 0.7));
+  const meterFontSize = Math.max(4, Math.min(8, PDF_CELL_SIZE * 2 * 0.5));
   const cellFontSize = Math.max(4, 7 * scale);
   const numFontSize = Math.max(8, 18 * scale);
   const numCircleSize = Math.max(6, 12 * scale);
 
-  // セルが小さい時に番号を間引く間隔
-  const colLabelStep = PDF_CELL_SIZE < 8 ? 5 : PDF_CELL_SIZE < 12 ? 2 : 1;
-  const rowLabelStep = PDF_CELL_SIZE < 8 ? 5 : PDF_CELL_SIZE < 12 ? 2 : 1;
-  // メーター番号の間引き（2セル=1mの表示単位）
-  const meterStep = PDF_CELL_SIZE * 2 < 16 ? Math.ceil(16 / (PDF_CELL_SIZE * 2)) : 1;
+  // 間引き — 最大桁数のテキスト幅がセル幅を超える場合にステップを計算
+  const maxColText = String(parkingLot.cols);
+  const maxColTw = jpFont.widthOfTextAtSize(maxColText, headerFontSize);
+  const colLabelStep = maxColTw > PDF_CELL_SIZE ? Math.ceil(maxColTw / PDF_CELL_SIZE) + 1 : 1;
+  const maxRowText = String(parkingLot.rows);
+  const maxRowTw = jpFont.widthOfTextAtSize(maxRowText, headerFontSize);
+  const rowLabelStep = maxRowTw > PDF_CELL_SIZE ? Math.ceil(maxRowTw / PDF_CELL_SIZE) + 1 : 1;
+  // メーター — 1m表示幅(2セル分)に対するテキスト幅
+  const meterCellSpan = PDF_CELL_SIZE * 2;
+  const maxMeterText = String(Math.ceil(Math.max(parkingLot.cols, parkingLot.rows) / 2));
+  const maxMeterTw = jpFont.widthOfTextAtSize(maxMeterText, meterFontSize);
+  const meterStep = maxMeterTw > meterCellSpan ? Math.ceil(maxMeterTw / meterCellSpan) + 1 : 1;
 
   // === メーター表示（上側 - 2セルごとに1m）===
   for (let m = 0; m * 2 < parkingLot.cols; m++) {
