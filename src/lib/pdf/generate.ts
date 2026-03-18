@@ -5,16 +5,19 @@ import { Vehicle } from "../models/vehicle";
 import { PlacedVehicle } from "../models/placement";
 import { buildTypeColorMap } from "../vehicle-colors";
 
-/** PDF上の1セルのサイズ（ポイント） */
-const PDF_CELL_SIZE = 28;
-/** セル番号ヘッダーサイズ */
-const PDF_HEADER_SIZE = 20;
-/** メーターヘッダーサイズ */
-const PDF_METER_HEADER = 16;
-/** ヘッダー合計 */
-const PDF_TOTAL_HEADER = PDF_HEADER_SIZE + PDF_METER_HEADER;
-/** ページマージン */
-const PDF_MARGIN = 40;
+/** A4サイズ（ポイント） */
+const A4_W = 595.28;
+const A4_H = 841.89;
+
+/** 基本サイズ（スケーリング前） */
+const BASE_HEADER_SIZE = 20;
+const BASE_METER_HEADER = 16;
+const BASE_TOTAL_HEADER = BASE_HEADER_SIZE + BASE_METER_HEADER;
+const BASE_MARGIN = 40;
+const BASE_LEGEND_WIDTH = 220;
+const BASE_TITLE_HEIGHT = 25;
+
+export type PdfOrientation = "portrait" | "landscape";
 
 /** フォントキャッシュ */
 let fontCache: ArrayBuffer | null = null;
@@ -37,7 +40,8 @@ async function loadJapaneseFont(): Promise<ArrayBuffer> {
 export async function generatePdf(
   parkingLot: ParkingLotData,
   vehicles: Vehicle[],
-  placements: PlacedVehicle[]
+  placements: PlacedVehicle[],
+  orientation: PdfOrientation = "landscape"
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
 
@@ -46,26 +50,34 @@ export async function generatePdf(
   const fontBytes = await loadJapaneseFont();
   const jpFont = await pdfDoc.embedFont(fontBytes);
 
+  // A4ページサイズ
+  const pageWidth = orientation === "landscape" ? A4_H : A4_W;
+  const pageHeight = orientation === "landscape" ? A4_W : A4_H;
+
+  // 利用可能領域からスケール計算
+  const availW = pageWidth - BASE_MARGIN * 2 - BASE_TOTAL_HEADER - BASE_LEGEND_WIDTH;
+  const availH = pageHeight - BASE_MARGIN * 2 - BASE_TOTAL_HEADER - BASE_TITLE_HEIGHT;
+  const scaleX = availW / (parkingLot.cols * 28);
+  const scaleY = availH / (parkingLot.rows * 28);
+  const scale = Math.min(scaleX, scaleY, 1); // 1を超えないように
+
+  const PDF_CELL_SIZE = 28 * scale;
+  const PDF_HEADER_SIZE = BASE_HEADER_SIZE * scale;
+  const PDF_METER_HEADER = BASE_METER_HEADER * scale;
+  const PDF_TOTAL_HEADER = PDF_HEADER_SIZE + PDF_METER_HEADER;
+  const PDF_MARGIN = BASE_MARGIN;
+
   const gridWidth = parkingLot.cols * PDF_CELL_SIZE;
   const gridHeight = parkingLot.rows * PDF_CELL_SIZE;
 
-  // ページサイズ計算（グリッド+ヘッダー+マージン+凡例）
-  const legendWidth = 220;
-  const pageWidth = gridWidth + PDF_TOTAL_HEADER + PDF_MARGIN * 2 + legendWidth;
-  const legendHeight = vehicles.length * 16 + 60;
-  const pageHeight = Math.max(
-    gridHeight + PDF_TOTAL_HEADER + PDF_MARGIN * 2 + 30,
-    legendHeight + PDF_MARGIN * 2 + 30
-  );
+  // 凡例幅はスケールしない（テキストの可読性確保）
+  const legendWidth = BASE_LEGEND_WIDTH;
 
-  const page = pdfDoc.addPage([
-    Math.max(pageWidth, 595),
-    Math.max(pageHeight, 420),
-  ]);
+  const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
-  // グリッド左上の起点（メーター＋セル番号ヘッダー分オフセット）
+  // グリッド左上の起点
   const originX = PDF_MARGIN + PDF_TOTAL_HEADER;
-  const topY = page.getHeight() - PDF_MARGIN - 25;
+  const topY = page.getHeight() - PDF_MARGIN - BASE_TITLE_HEIGHT;
   const originY = topY - PDF_TOTAL_HEADER;
 
   // タイトル
@@ -142,6 +154,13 @@ export async function generatePdf(
     color: headerColor,
   });
 
+  // スケール対応フォントサイズ
+  const meterFontSize = Math.max(5, 8 * scale);
+  const headerFontSize = Math.max(5, 8 * scale);
+  const cellFontSize = Math.max(4, 7 * scale);
+  const numFontSize = Math.max(8, 18 * scale);
+  const numCircleSize = Math.max(6, 12 * scale);
+
   // === メーター表示（上側 - 2セルごとに1m）===
   for (let m = 0; m * 2 < parkingLot.cols; m++) {
     const startCol = m * 2;
@@ -149,11 +168,11 @@ export async function generatePdf(
     const cx = originX + startCol * PDF_CELL_SIZE + (spanCols * PDF_CELL_SIZE) / 2;
     const cy = originY + PDF_HEADER_SIZE + PDF_METER_HEADER / 2;
     const text = String(m + 1);
-    const tw = jpFont.widthOfTextAtSize(text, 8);
+    const tw = jpFont.widthOfTextAtSize(text, meterFontSize);
     page.drawText(text, {
       x: cx - tw / 2,
       y: cy - 3,
-      size: 8,
+      size: meterFontSize,
       font: jpFont,
       color: meterTextColor,
     });
@@ -186,11 +205,11 @@ export async function generatePdf(
     const cx = PDF_MARGIN + PDF_METER_HEADER / 2;
     const cy = originY - startRow * PDF_CELL_SIZE - (spanRows * PDF_CELL_SIZE) / 2;
     const text = String(m + 1);
-    const tw = jpFont.widthOfTextAtSize(text, 8);
+    const tw = jpFont.widthOfTextAtSize(text, meterFontSize);
     page.drawText(text, {
       x: cx - tw / 2,
       y: cy - 3,
-      size: 8,
+      size: meterFontSize,
       font: jpFont,
       color: meterTextColor,
     });
@@ -256,11 +275,11 @@ export async function generatePdf(
         const cx = cellX(p.col + dc) + PDF_CELL_SIZE / 2;
         const cy = cellY(p.row + dr) - PDF_CELL_SIZE / 2;
         const text = "50";
-        const textWidth = jpFont.widthOfTextAtSize(text, 7);
+        const textWidth = jpFont.widthOfTextAtSize(text, cellFontSize);
         page.drawText(text, {
           x: cx - textWidth / 2,
-          y: cy - 3,
-          size: 7,
+          y: cy - cellFontSize / 2,
+          size: cellFontSize,
           font: jpFont,
           color: rgb(0.3, 0.3, 0.3),
         });
@@ -269,7 +288,6 @@ export async function generatePdf(
 
     // 車両番号（中央に大きく）
     const numText = String(vehicle.number);
-    const numFontSize = 18;
     const numWidth = jpFont.widthOfTextAtSize(numText, numFontSize);
     const centerX = rectX + rectW / 2;
     const centerY = rectY + rectH / 2;
@@ -278,13 +296,13 @@ export async function generatePdf(
     page.drawCircle({
       x: centerX,
       y: centerY,
-      size: 12,
+      size: numCircleSize,
       color: rgb(1, 1, 1),
       opacity: 0.85,
     });
     page.drawText(numText, {
       x: centerX - numWidth / 2,
-      y: centerY - 6,
+      y: centerY - numFontSize / 3,
       size: numFontSize,
       font: jpFont,
       color: rgb(0.1, 0.1, 0.1),
@@ -362,11 +380,11 @@ export async function generatePdf(
   // === 列番号（セル番号ヘッダー内）===
   for (let c = 0; c < parkingLot.cols; c++) {
     const text = String(c + 1);
-    const textWidth = jpFont.widthOfTextAtSize(text, 8);
+    const textWidth = jpFont.widthOfTextAtSize(text, headerFontSize);
     page.drawText(text, {
       x: cellX(c) + PDF_CELL_SIZE / 2 - textWidth / 2,
-      y: originY + PDF_HEADER_SIZE / 2 - 3,
-      size: 8,
+      y: originY + PDF_HEADER_SIZE / 2 - headerFontSize / 3,
+      size: headerFontSize,
       font: jpFont,
       color: rgb(0.4, 0.4, 0.4),
     });
@@ -375,11 +393,11 @@ export async function generatePdf(
   // === 行番号（セル番号ヘッダー内）===
   for (let r = 0; r < parkingLot.rows; r++) {
     const text = String(r + 1);
-    const textWidth = jpFont.widthOfTextAtSize(text, 8);
+    const textWidth = jpFont.widthOfTextAtSize(text, headerFontSize);
     page.drawText(text, {
       x: PDF_MARGIN + PDF_METER_HEADER + PDF_HEADER_SIZE / 2 - textWidth / 2,
-      y: cellY(r) - PDF_CELL_SIZE / 2 - 3,
-      size: 8,
+      y: cellY(r) - PDF_CELL_SIZE / 2 - headerFontSize / 3,
+      size: headerFontSize,
       font: jpFont,
       color: rgb(0.4, 0.4, 0.4),
     });

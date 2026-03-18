@@ -4,12 +4,13 @@ import { useState, useMemo } from "react";
 import ParkingLotCanvas from "../grid/ParkingLotCanvas";
 import PlacementControls from "../placement/PlacementControls";
 import { useAppStore } from "@/lib/store";
-import { generatePdf } from "@/lib/pdf/generate";
+import { generatePdf, PdfOrientation } from "@/lib/pdf/generate";
 import { buildTypeColorMap } from "@/lib/vehicle-colors";
 
 export default function Step3Placement() {
   const { parkingLot, vehicles, placements } = useAppStore();
   const [generating, setGenerating] = useState(false);
+  const [orientation, setOrientation] = useState<PdfOrientation>("landscape");
   const typeColorMap = useMemo(() => buildTypeColorMap(vehicles), [vehicles]);
 
   const existingVehicles = vehicles.filter((v) => v.status === "existing");
@@ -18,7 +19,7 @@ export default function Step3Placement() {
   const handleGeneratePdf = async () => {
     setGenerating(true);
     try {
-      const pdfBytes = await generatePdf(parkingLot, vehicles, placements);
+      const pdfBytes = await generatePdf(parkingLot, vehicles, placements, orientation);
       const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -71,6 +72,33 @@ export default function Step3Placement() {
       {/* 左: 配置操作 */}
       <div className="space-y-3">
         <PlacementControls />
+        <div className="space-y-1">
+          <label className="text-xs text-gray-500">PDF用紙方向</label>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => setOrientation("landscape")}
+              className={`flex-1 px-2 py-1 text-xs rounded border ${
+                orientation === "landscape"
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-600 border-gray-300"
+              }`}
+            >
+              横（A4横）
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrientation("portrait")}
+              className={`flex-1 px-2 py-1 text-xs rounded border ${
+                orientation === "portrait"
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-600 border-gray-300"
+              }`}
+            >
+              縦（A4縦）
+            </button>
+          </div>
+        </div>
         <button
           onClick={handleGeneratePdf}
           disabled={generating || placements.length === 0}
