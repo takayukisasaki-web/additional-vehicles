@@ -54,24 +54,26 @@ export async function generatePdf(
   const pageWidth = orientation === "landscape" ? A4_H : A4_W;
   const pageHeight = orientation === "landscape" ? A4_W : A4_H;
 
-  // 利用可能領域からスケール計算
-  const availW = pageWidth - BASE_MARGIN * 2 - BASE_TOTAL_HEADER - BASE_LEGEND_WIDTH;
-  const availH = pageHeight - BASE_MARGIN * 2 - BASE_TOTAL_HEADER - BASE_TITLE_HEIGHT;
-  const scaleX = availW / (parkingLot.cols * 28);
-  const scaleY = availH / (parkingLot.rows * 28);
-  const scale = Math.min(scaleX, scaleY, 1); // 1を超えないように
-
-  const PDF_CELL_SIZE = 28 * scale;
-  const PDF_HEADER_SIZE = BASE_HEADER_SIZE * scale;
-  const PDF_METER_HEADER = BASE_METER_HEADER * scale;
+  // ヘッダー・マージンは固定サイズ（スケールしない）
+  const PDF_HEADER_SIZE = BASE_HEADER_SIZE;
+  const PDF_METER_HEADER = BASE_METER_HEADER;
   const PDF_TOTAL_HEADER = PDF_HEADER_SIZE + PDF_METER_HEADER;
   const PDF_MARGIN = BASE_MARGIN;
 
+  // 凡例は右1/3
+  const legendWidth = Math.floor(pageWidth / 3);
+  const legendGap = 20;
+
+  // グリッド利用可能領域
+  const availW = pageWidth - PDF_MARGIN * 2 - PDF_TOTAL_HEADER - legendWidth - legendGap;
+  const availH = pageHeight - PDF_MARGIN * 2 - PDF_TOTAL_HEADER - BASE_TITLE_HEIGHT;
+  const scaleX = availW / (parkingLot.cols * 28);
+  const scaleY = availH / (parkingLot.rows * 28);
+  const scale = Math.min(scaleX, scaleY, 1);
+
+  const PDF_CELL_SIZE = 28 * scale;
   const gridWidth = parkingLot.cols * PDF_CELL_SIZE;
   const gridHeight = parkingLot.rows * PDF_CELL_SIZE;
-
-  // 凡例幅はスケールしない（テキストの可読性確保）
-  const legendWidth = BASE_LEGEND_WIDTH;
 
   const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
@@ -154,30 +156,24 @@ export async function generatePdf(
     color: headerColor,
   });
 
-  // スケール対応フォントサイズ
-  const meterFontSize = Math.max(5, 8 * scale);
-  const headerFontSize = Math.max(5, 8 * scale);
+  // フォントサイズ（ヘッダーは固定、グリッド内はスケール）
+  const meterFontSize = 8;
+  const headerFontSize = 8;
   const cellFontSize = Math.max(4, 7 * scale);
   const numFontSize = Math.max(8, 18 * scale);
   const numCircleSize = Math.max(6, 12 * scale);
 
+  // セルが小さい時に番号を間引く間隔
+  const colLabelStep = PDF_CELL_SIZE < 8 ? 5 : PDF_CELL_SIZE < 12 ? 2 : 1;
+  const rowLabelStep = PDF_CELL_SIZE < 8 ? 5 : PDF_CELL_SIZE < 12 ? 2 : 1;
+  // メーター番号の間引き（2セル=1mの表示単位）
+  const meterStep = PDF_CELL_SIZE * 2 < 16 ? Math.ceil(16 / (PDF_CELL_SIZE * 2)) : 1;
+
   // === メーター表示（上側 - 2セルごとに1m）===
   for (let m = 0; m * 2 < parkingLot.cols; m++) {
     const startCol = m * 2;
-    const spanCols = Math.min(2, parkingLot.cols - startCol);
-    const cx = originX + startCol * PDF_CELL_SIZE + (spanCols * PDF_CELL_SIZE) / 2;
-    const cy = originY + PDF_HEADER_SIZE + PDF_METER_HEADER / 2;
-    const text = String(m + 1);
-    const tw = jpFont.widthOfTextAtSize(text, meterFontSize);
-    page.drawText(text, {
-      x: cx - tw / 2,
-      y: cy - 3,
-      size: meterFontSize,
-      font: jpFont,
-      color: meterTextColor,
-    });
 
-    // メーター区切り線
+    // 区切り線（常に描画）
     const lineX = originX + startCol * PDF_CELL_SIZE;
     page.drawLine({
       start: { x: lineX, y: originY + PDF_HEADER_SIZE },
@@ -185,6 +181,22 @@ export async function generatePdf(
       thickness: 0.5,
       color: meterTextColor,
     });
+
+    // テキスト（間引き）
+    if (m % meterStep === 0) {
+      const spanCols = Math.min(2, parkingLot.cols - startCol);
+      const cx = originX + startCol * PDF_CELL_SIZE + (spanCols * PDF_CELL_SIZE) / 2;
+      const cy = originY + PDF_HEADER_SIZE + PDF_METER_HEADER / 2;
+      const text = String(m + 1);
+      const tw = jpFont.widthOfTextAtSize(text, meterFontSize);
+      page.drawText(text, {
+        x: cx - tw / 2,
+        y: cy - 3,
+        size: meterFontSize,
+        font: jpFont,
+        color: meterTextColor,
+      });
+    }
   }
   // 最後の区切り線
   {
@@ -201,20 +213,8 @@ export async function generatePdf(
   // === メーター表示（左側 - 2セルごとに1m）===
   for (let m = 0; m * 2 < parkingLot.rows; m++) {
     const startRow = m * 2;
-    const spanRows = Math.min(2, parkingLot.rows - startRow);
-    const cx = PDF_MARGIN + PDF_METER_HEADER / 2;
-    const cy = originY - startRow * PDF_CELL_SIZE - (spanRows * PDF_CELL_SIZE) / 2;
-    const text = String(m + 1);
-    const tw = jpFont.widthOfTextAtSize(text, meterFontSize);
-    page.drawText(text, {
-      x: cx - tw / 2,
-      y: cy - 3,
-      size: meterFontSize,
-      font: jpFont,
-      color: meterTextColor,
-    });
 
-    // メーター区切り線
+    // 区切り線（常に描画）
     const lineY = originY - startRow * PDF_CELL_SIZE;
     page.drawLine({
       start: { x: PDF_MARGIN, y: lineY },
@@ -222,6 +222,22 @@ export async function generatePdf(
       thickness: 0.5,
       color: meterTextColor,
     });
+
+    // テキスト（間引き）
+    if (m % meterStep === 0) {
+      const spanRows = Math.min(2, parkingLot.rows - startRow);
+      const cx = PDF_MARGIN + PDF_METER_HEADER / 2;
+      const cy = originY - startRow * PDF_CELL_SIZE - (spanRows * PDF_CELL_SIZE) / 2;
+      const text = String(m + 1);
+      const tw = jpFont.widthOfTextAtSize(text, meterFontSize);
+      page.drawText(text, {
+        x: cx - tw / 2,
+        y: cy - 3,
+        size: meterFontSize,
+        font: jpFont,
+        color: meterTextColor,
+      });
+    }
   }
   // 最後の区切り線
   {
@@ -377,8 +393,9 @@ export async function generatePdf(
     }
   }
 
-  // === 列番号（セル番号ヘッダー内）===
+  // === 列番号（セル番号ヘッダー内、間引き対応）===
   for (let c = 0; c < parkingLot.cols; c++) {
+    if ((c + 1) % colLabelStep !== 0 && c !== 0) continue;
     const text = String(c + 1);
     const textWidth = jpFont.widthOfTextAtSize(text, headerFontSize);
     page.drawText(text, {
@@ -390,8 +407,9 @@ export async function generatePdf(
     });
   }
 
-  // === 行番号（セル番号ヘッダー内）===
+  // === 行番号（セル番号ヘッダー内、間引き対応）===
   for (let r = 0; r < parkingLot.rows; r++) {
+    if ((r + 1) % rowLabelStep !== 0 && r !== 0) continue;
     const text = String(r + 1);
     const textWidth = jpFont.widthOfTextAtSize(text, headerFontSize);
     page.drawText(text, {
@@ -403,8 +421,8 @@ export async function generatePdf(
     });
   }
 
-  // === 車両一覧（凡例）===
-  const legendX = originX + gridWidth + 30;
+  // === 車両一覧（凡例）— ページ右1/3 ===
+  const legendX = pageWidth - legendWidth - PDF_MARGIN + 10;
   let legendY = originY - 5;
   const legendColW = 14;
   const legendRowH = 16;
