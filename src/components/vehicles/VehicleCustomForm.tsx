@@ -38,7 +38,7 @@ export default function VehicleCustomForm() {
       </div>
       <div className="flex flex-nowrap items-end gap-2">
         <div className="shrink-0">
-          <label className="text-xs text-gray-500">全長(cm)</label>
+          <label className="text-xs text-gray-500">全長(cm){lengthVal > 0 ? ` … ${cmToCells(lengthVal)}セル` : ""}</label>
           <input
             type="number"
             placeholder="620"
@@ -46,10 +46,9 @@ export default function VehicleCustomForm() {
             onChange={(e) => setLengthCm(e.target.value)}
             className="block w-20 px-2 py-1 text-sm border border-gray-300 rounded"
           />
-          <span className="text-xs text-gray-400">{lengthVal > 0 ? `${cmToCells(lengthVal)}セル` : "\u00A0"}</span>
         </div>
         <div className="shrink-0">
-          <label className="text-xs text-gray-500">全幅(cm)</label>
+          <label className="text-xs text-gray-500">全幅(cm){widthVal > 0 ? ` … ${cmToCells(widthVal)}セル` : ""}</label>
           <input
             type="number"
             placeholder="215"
@@ -57,7 +56,6 @@ export default function VehicleCustomForm() {
             onChange={(e) => setWidthCm(e.target.value)}
             className="block w-20 px-2 py-1 text-sm border border-gray-300 rounded"
           />
-          <span className="text-xs text-gray-400">{widthVal > 0 ? `${cmToCells(widthVal)}セル` : "\u00A0"}</span>
         </div>
         <div className="shrink-0">
           <label className="text-xs text-gray-500">区分</label>
